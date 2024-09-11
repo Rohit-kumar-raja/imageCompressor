@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Compress and Resize Multiple Images</title>
+    <style>
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .compressedImage {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Compress and Resize Multiple Images</h1>
+    <p>Upload multiple images and compress them.</p>
+    <input multiple id="upload" type="file" accept="image/*" />
+    <div id="imageContainer"></div>
+
+</body>
+
+</html>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const fileInput = document.querySelector("#upload");
+        const imageContainer = document.querySelector("#imageContainer");
+
+        let targetSize = 100 * 1024; // Set target size as 100KB per image
+
+        fileInput.addEventListener("change", async (e) => {
+            imageContainer.innerHTML = ''; // Clear container before displaying new images
+
+            const compressedFiles =  await compressImageToTargetSize(fileInput.files, targetSize);
+            console.log(compressedFiles);
+
+            compressedFiles.forEach(file => {
+                const imgElement = document.createElement("img");
+                const sizeElement = document.createElement("div");
+
+                imgElement.src = URL.createObjectURL(file);
+                imgElement.classList.add('compressedImage');
+                sizeElement.textContent = `Compressed Size: ${bytesToSize(file.size)}`;
+
+                imageContainer.appendChild(imgElement);
+                imageContainer.appendChild(sizeElement);
+            });
+        });
+
+        // Compress images and return a promise with the compressed files
+       async function  compressImageToTargetSize(files, targetSize) {
+            let quality = 0.9;
+            let resizingFactor = 1.0;
+
+            return Promise.all(Array.from(files).map(file => {
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    const reader = new FileReader();
+
+                    reader.onload = () => {
+                        img.src = reader.result;
+                        img.onload = () => {
+                            const originalWidth = img.width;
+                            const originalHeight = img.height;
+
+                            const compress = () => {
+                                const canvas = document.createElement("canvas");
+                                const context = canvas.getContext("2d");
+
+                                const canvasWidth = originalWidth * resizingFactor;
+                                const canvasHeight = originalHeight * resizingFactor;
+
+                                canvas.width = canvasWidth;
+                                canvas.height = canvasHeight;
+
+                                context.drawImage(
+                                    img,
+                                    0,
+                                    0,
+                                    canvasWidth,
+                                    canvasHeight
+                                );
+
+                                // Convert the canvas to a Blob and check the size
+                                canvas.toBlob((blob) => {
+                                    if (blob) {
+                                        const currentSize = blob.size;
+
+                                        if (currentSize > targetSize && quality > 0.1) {
+                                            // Reduce resizing factor if the size is still too large
+                                            resizingFactor -= 0.01;
+                                            compress();
+                                        } else {
+                                            // Convert Blob to File
+                                            const compressedFile = new File([blob], file.name, { type: file.type });
+                                            resolve(compressedFile); // Return the compressed file
+                                        }
+                                    }
+                                }, file.type, quality);
+                            };
+
+                            compress();
+                        };
+                    };
+
+                    reader.readAsDataURL(file);
+                });
+            }));
+        }
+
+        function bytesToSize(bytes) {
+            const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+            if (bytes === 0) return "0 Byte";
+            const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
+            return Math.round(bytes / Math.pow(1024, i), 2) + " " + sizes[i];
+        }
+    });
+</script>
